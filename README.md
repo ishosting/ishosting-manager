@@ -32,16 +32,15 @@ The skill wraps the Is\*Hosting REST API into a clean Python CLI that AI agents 
 
 Follow the instructions in the marketplace of choice:
 
-https://skillsmp.com
-https://skillzwave.ai
-https://awesomeskill.ai
-https://www.skillhub.club
-https://skill0.io
-https://agentskills.to
-https://deepskills.ai
-https://smithery.ai
-https://skills.sh 
-...
+- https://skills.sh 
+- https://skillsmp.com
+- https://skillzwave.ai
+- https://awesomeskill.ai
+- https://www.skillhub.club
+- https://skill0.io
+- https://agentskills.to
+- https://deepskills.ai
+- https://smithery.ai
 
 ### 2. Configure credentials
 
@@ -50,12 +49,6 @@ To make things smoother you can optionally create .env file.
 ```env
 ISHOSTING_TOKEN=your_api_token_here
 ISHOSTING_BASE_URL=base_url_from_documentation_here
-```
-
-Optional variables:
-
-```env
-ISHOSTING_BASE_AUTH=username:password   # Basic auth, if required
 ```
 
 ### 3. Open in your AI tool
