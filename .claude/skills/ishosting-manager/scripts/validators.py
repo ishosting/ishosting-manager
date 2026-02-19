@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Is*Hosting order pre-validator — catches incompatible configs before API calls."""
+"""is*hosting order pre-validator — catches incompatible configs before API calls."""
 
 import json
 import sys

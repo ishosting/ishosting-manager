@@ -1,12 +1,12 @@
-# Is\*Hosting Manager — AI Agent Skill
+# is\*hosting Manager — AI Agent Skill
 
-Code skill that gives AI agents full control over Is\*Hosting infrastructure. Order servers, manage billing, configure services, and automate cloud operations through natural language.
+Code skill that gives AI agents full control over is\*hosting infrastructure. Order servers, manage billing, configure services, and automate cloud operations through natural language.
 
 ---
 
 ## What It Does
 
-The skill wraps the Is\*Hosting REST API into a clean Python CLI that AI agents (Claude Code, Cursor, OpenAI Codex) can call to manage your infrastructure end-to-end:
+The skill wraps the is\*hosting REST API into a clean Python CLI that AI agents (Claude Code, Cursor, OpenAI Codex) can call to manage your infrastructure end-to-end:
 
 - **Order & provision** VPS, Dedicated, Storage, and VPN servers
 - **Configure hardware** — CPU, RAM, disk, GPU, DDoS protection, RAID, extra IPs
@@ -22,7 +22,7 @@ The skill wraps the Is\*Hosting REST API into a clean Python CLI that AI agents 
 
 - Python 3.12+
 - [`uv`](https://github.com/astral-sh/uv) package runner
-- An Is\*Hosting account with an API token
+- An is\*hosting account with an API token
 
 ---
 
@@ -97,7 +97,7 @@ You can now start using the skill’s abilities with natural language.
 
 MIT License
 
-Copyright (c) [2026] [Is*Hosting]
+Copyright (c) [2026] [is*hosting]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

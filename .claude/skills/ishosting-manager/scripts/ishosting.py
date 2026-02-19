@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Is*Hosting API — polymorphic interface with zero-arg defaults."""
+"""is*hosting API — polymorphic interface with zero-arg defaults."""
 
 import base64
 import json

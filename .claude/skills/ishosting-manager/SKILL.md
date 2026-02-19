@@ -1,6 +1,6 @@
 ---
 name: ishosting-manager
-description: Complete Is*Hosting infrastructure management via API. Order and configure VPS, Dedicated, Storage, VPN servers with custom hardware. Install OS, control panels, deploy apps and websites. Manage SSH keys, billing, invoices, DNS, and service lifecycle.
+description: Complete is*hosting infrastructure management via API. Order and configure VPS, Dedicated, Storage, VPN servers with custom hardware. Install OS, control panels, deploy apps and websites. Manage SSH keys, billing, invoices, DNS, and service lifecycle.
 ---
 
 # [H1][ishosting-manager]
@@ -8,7 +8,7 @@ description: Complete Is*Hosting infrastructure management via API. Order and co
 
 <br>
 
-Complete Is*Hosting infrastructure management through Python API wrapper.
+Complete is*hosting infrastructure management through Python API wrapper.
 
 ## Credentials
 
@@ -429,7 +429,7 @@ cat ~/.ssh/id_ed25519.pub || cat ~/.ssh/id_rsa.pub
 If found, show the public key and ask: "Use this SSH key?"
 
 If user agrees:
-1. First, get their existing SSH keys from Is*Hosting profile:
+1. First, get their existing SSH keys from is*hosting profile:
 ```bash
 uv run .claude/skills/ishosting-manager/scripts/ishosting.py ssh-key-view
 ```
@@ -622,7 +622,7 @@ The API will deduct available balance first, then generate a payment link for th
 
 Same flow as Recipe A, Step 4 (Options A/B/C).
 
-#### Step 3: Add key to Is*Hosting profile
+#### Step 3: Add key to is*hosting profile
 
 ```bash
 uv run .claude/skills/ishosting-manager/scripts/ishosting.py ssh-key-create --title "My SSH Key" --public "ssh-ed25519 AAAA..."
