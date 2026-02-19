@@ -1,0 +1,4 @@
+.env
+*.json
+*.yaml
+.DS_STORE
