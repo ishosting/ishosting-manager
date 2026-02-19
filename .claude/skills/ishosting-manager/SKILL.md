@@ -19,7 +19,7 @@ The script automatically searches for `.env` files in:
 
 **Required environment variables:**
 - `ISHOSTING_TOKEN` - Your API token
-- `ISHOSTING_BASE_URL` - API base URL
+- `ISHOSTING_BASE_URL` - API base URL (**must use `https://`** — the script rejects `http://` to protect credentials)
 
 **Optional environment variables:**
 - `ISHOSTING_API_LANGUAGE` - API language (auto-detected, see below)
@@ -48,6 +48,12 @@ ISHOSTING_TOKEN=<token>
 ISHOSTING_BASE_URL=<url>
 ISHOSTING_BASE_AUTH=<auth>
 EOF
+chmod 600 .env
+```
+
+**Step 4: Ensure `.env` is in `.gitignore`** (prevents accidental credential commits):
+```bash
+grep -qxF '.env' .gitignore 2>/dev/null || echo '.env' >> .gitignore
 ```
 
 This ensures credentials persist across sessions. Do NOT guess or invent credential values. Do NOT save `ISHOSTING_API_LANGUAGE` to `.env` — language is auto-detected from the user's messages via the `--lang` flag.
@@ -723,7 +729,25 @@ uv run .claude/skills/ishosting-manager/scripts/ishosting.py {svc}-status-change
 
 **When to use**: User wants to cancel a VPS, VPN, Storage, or Dedicated service.
 
-**[CRITICAL]** When the user asks to cancel a service — cancel it immediately. Do NOT discuss refunds, remaining time, money, or billing implications. Just cancel and report the result.
+**[CRITICAL]** Cancellation is a **destructive and irreversible** operation. You MUST get explicit user confirmation before proceeding.
+
+#### Step 1: Show current service info
+
+Fetch the service details first so the user sees what they're cancelling:
+```bash
+uv run .claude/skills/ishosting-manager/scripts/ishosting.py vps-view --id 12345
+```
+
+Show the user: service name, plan, location, IP, expiration date.
+
+#### Step 2: Request explicit confirmation
+
+Ask the user clearly:
+"Are you sure you want to cancel service **[name]** (ID: [id])? This action is **irreversible** — the service will be terminated. (yes/no)"
+
+**DO NOT** execute the cancel command until the user explicitly confirms with "yes".
+
+#### Step 3: Execute cancellation (only after confirmation)
 
 ```bash
 uv run .claude/skills/ishosting-manager/scripts/ishosting.py vps-status-change --id 12345 --action cancel

@@ -8,7 +8,9 @@
 import base64
 import json
 import os
+import ssl
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from http.client import IncompleteRead
@@ -35,7 +37,7 @@ class _B:
     limit: int = 30
     timeout: int = 30
     encoding: str = "utf-8"
-    user_agent: str = "ishosting-manager/1.0.0 (Python)"
+    user_agent: str = "ishosting-manager-skill"
     page: int = 1
 
 
@@ -55,20 +57,35 @@ VALID_ACTIONS: Final[dict[str, frozenset[str]]] = {
 }
 
 
+def _find_project_root(start: Path) -> Path | None:
+    """Walk up from start to find project root (directory containing .git)."""
+    current = start.resolve()
+    for _ in range(10):  # Max 10 levels up to prevent infinite traversal
+        if (current / ".git").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
 def _load_env_file() -> None:
-    """Search for and load .env files from project directory."""
-    # Start from script location and walk up to find project root
+    """Search for and load .env file from project root or user config."""
     script_dir = Path(__file__).resolve().parent
 
-    search_paths = [
-        Path.cwd(),  # Current working directory
-        script_dir,  # Script directory
-        script_dir.parent,  # skills/ishosting-manager
-        script_dir.parent.parent,  # skills
-        script_dir.parent.parent.parent,  # .claude
-        script_dir.parent.parent.parent.parent,  # Project root
-        Path.home() / ".config" / "ishosting",  # User config
-    ]
+    # Determine project root via .git marker (safe anchor point)
+    project_root = _find_project_root(script_dir)
+
+    search_paths: list[Path] = []
+    if project_root:
+        search_paths.append(project_root)
+    # Fallback: script's ancestor that should be project root (.claude/skills/ishosting-manager/scripts → 4 levels up)
+    candidate_root = script_dir.parent.parent.parent.parent
+    if candidate_root not in search_paths and candidate_root.exists():
+        search_paths.append(candidate_root)
+    # User config directory (always checked last)
+    search_paths.append(Path.home() / ".config" / "ishosting")
 
     for path in search_paths:
         env_file = path / ".env"
@@ -85,8 +102,12 @@ def _load_env_file() -> None:
                             if key not in os.environ:
                                 os.environ[key] = value
                 return  # Stop after first .env file found
-            except Exception:
-                continue  # Silently skip unreadable files
+            except PermissionError:
+                print(f"[WARN] Cannot read {env_file}: permission denied", file=sys.stderr)
+                continue
+            except Exception as exc:
+                print(f"[WARN] Failed to load {env_file}: {exc}", file=sys.stderr)
+                continue
 
 COMMANDS: Final[dict[str, dict[str, str]]] = {
     # PROFILE
@@ -257,6 +278,10 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None, retry: 
     language = os.environ.get(B.language, "en")
     base_url = os.environ.get(B.base_url, "")
 
+    # Validate HTTPS to prevent token leakage over plaintext
+    if base_url and not base_url.startswith("https://"):
+        return {"error": "InsecureURL", "message": "ISHOSTING_BASE_URL must use https:// to protect API credentials"}
+
     url = f"{base_url}{path}"
     headers = {
         "X-Api-Token": token,
@@ -271,34 +296,52 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None, retry: 
 
     data = json.dumps(body).encode(B.encoding) if body is not None else None
 
+    # Explicit SSL context with system CA certificates
+    ssl_ctx = ssl.create_default_context()
+
     for attempt in range(retry):
         req = Request(url, data=data, headers=headers, method=method)
         try:
-            with urlopen(req, timeout=B.timeout) as resp:
+            with urlopen(req, timeout=B.timeout, context=ssl_ctx) as resp:
                 if 200 <= resp.status < 300:
                     try:
-                        # Read the response with error handling for incomplete reads
                         response_body = resp.read().decode(B.encoding)
                         return json.loads(response_body) if response_body else {}
                     except IncompleteRead as e:
-                        # On incomplete read, try to parse what we got
                         partial = e.partial.decode(B.encoding, errors='ignore')
                         try:
                             return json.loads(partial)
                         except json.JSONDecodeError:
-                            # If this is not the last attempt, retry
                             if attempt < retry - 1:
+                                time.sleep(min(2 ** attempt, 8))
                                 continue
-                            # Last attempt failed, return error
-                            return {"error": "IncompleteRead", "message": f"Failed to read complete response after {retry} attempts", "partial_data": partial[:200]}
+                            return {"error": "IncompleteRead", "message": f"Failed to read complete response after {retry} attempts"}
                 return {}
         except HTTPError as e:
-            return {"error": e.reason, "code": e.code, "body": e.read().decode(B.encoding)}
-        except IncompleteRead as e:
-            # Handle incomplete read at the connection level
+            # Sanitize: extract only safe fields, never expose raw server response body
+            error_body = ""
+            try:
+                error_body = e.read().decode(B.encoding)
+            except Exception:
+                pass
+            # Try to extract a clean error message from JSON response
+            error_msg = e.reason
+            try:
+                parsed = json.loads(error_body)
+                if isinstance(parsed, dict) and "message" in parsed:
+                    error_msg = parsed["message"]
+                elif isinstance(parsed, dict) and "error" in parsed:
+                    error_msg = parsed["error"]
+            except (json.JSONDecodeError, KeyError):
+                pass
+            return {"error": error_msg, "code": e.code}
+        except IncompleteRead:
             if attempt < retry - 1:
+                time.sleep(min(2 ** attempt, 8))
                 continue
             return {"error": "IncompleteRead", "message": f"Connection interrupted after {retry} attempts"}
+        except ssl.SSLError as e:
+            return {"error": "SSLError", "message": f"TLS/SSL error: {e.reason}"}
 
     return {"error": "RequestFailed", "message": "All retry attempts exhausted"}
 
@@ -328,6 +371,44 @@ def _error(message: str, cmd: str | None = None) -> dict[str, Any]:
 
 def _validate_args(cmd: str, args: Args) -> list[str]:
     return [f"--{k.replace('_', '-')}" for k in REQUIRED.get(cmd, ()) if args.get(k) is None]
+
+
+# Valid protocol values for rDNS and network commands
+_VALID_PROTOCOLS: Final[frozenset[str]] = frozenset({"ipv4", "ipv6"})
+
+
+def _sanitize_args(cmd: str, args: Args) -> str | None:
+    """Validate and sanitize argument values. Returns error message or None if OK."""
+    # Validate --id is a positive integer (prevents path traversal like ../../admin)
+    if "id" in args:
+        id_val = str(args["id"])
+        if not id_val.isdigit() or int(id_val) <= 0:
+            return f"Invalid --id '{args['id']}': must be a positive integer"
+        args["id"] = id_val  # Normalize to clean string
+
+    # Validate --amount is a positive number
+    if "amount" in args:
+        try:
+            amount = float(args["amount"])
+            if amount <= 0:
+                return f"Invalid --amount '{args['amount']}': must be a positive number"
+        except (ValueError, TypeError):
+            return f"Invalid --amount '{args['amount']}': must be a number"
+
+    # Validate --protocol is in whitelist
+    if "protocol" in args:
+        proto = str(args["protocol"]).lower()
+        if proto not in _VALID_PROTOCOLS:
+            return f"Invalid --protocol '{args['protocol']}': must be one of {', '.join(sorted(_VALID_PROTOCOLS))}"
+        args["protocol"] = proto  # Normalize to lowercase
+
+    # Validate --code contains only safe characters (alphanumeric, hyphens, underscores, dots)
+    if "code" in args:
+        code_val = str(args["code"])
+        if not all(c.isalnum() or c in "-_." for c in code_val):
+            return f"Invalid --code '{args['code']}': contains unsafe characters"
+
+    return None
 
 
 def _list_fmt(key: str) -> OutputFormatter:
@@ -442,9 +523,8 @@ def _order_body(a: Args) -> dict[str, Any]:
                 additions.extend(custom_additions)
             elif isinstance(custom_additions, dict):
                 additions.append(custom_additions)
-        except json.JSONDecodeError:
-            # Silently ignore invalid JSON, user will get validation error from API
-            pass
+        except json.JSONDecodeError as exc:
+            print(f"[WARN] Invalid JSON in --additions (ignored): {exc}", file=sys.stderr)
 
     item: dict[str, Any] = {
         "action": "new",
@@ -730,6 +810,11 @@ def main() -> int:
 
     if missing := _validate_args(cmd, opts):
         print(json.dumps(_error(f"Missing required: {', '.join(missing)}", cmd), indent=2))
+        return 1
+
+    # Sanitize and validate argument values (type checks, whitelist, path traversal prevention)
+    if sanitize_err := _sanitize_args(cmd, opts):
+        print(json.dumps(_error(sanitize_err, cmd), indent=2))
         return 1
 
     # Validate action parameter for status-change commands
