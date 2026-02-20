@@ -100,6 +100,27 @@ python script.py   #
 ```
 
 ---
+## [0][INTERACTION MODEL]
+
+**[CRITICAL]** This skill operates in a **step-by-step confirmation model**. Every user-facing question is a hard pause — the agent MUST stop and wait for an answer before doing anything else.
+
+### STOP GATE — mandatory rule
+
+Wherever you see **[STOP GATE]** in these instructions, you MUST:
+
+1. Output your question or summary to the user
+2. **Immediately end your response** — no further tool calls, no "proceeding...", no pre-emptive actions
+3. **Wait for the user's next message** before continuing
+
+**Why this matters:** Running multiple steps without confirmation can create orders, charges, or server deployments the user did not explicitly approve. Each STOP GATE protects the user from unintended actions.
+
+**[FORBIDDEN]** After a STOP GATE, you MUST NOT:
+- Call any tools (Bash, Read, etc.)
+- Assume a default answer and proceed
+- Say "I'll proceed with the default" or similar
+- Combine the question with the next action in the same message
+
+---
 ## [1][PROFILE]
 
 ```bash
@@ -347,7 +368,7 @@ uv run .claude/skills/ishosting-manager/scripts/ishosting.py billing-order-creat
    ```
    - Present as aligned columns with location name and code
    - Ask user: "Which location? (enter the number or code)"
-   - **WAIT for user response!**
+   - **[STOP GATE]** End your response here. Do NOT fetch plans. Do NOT assume a default location. Wait for user input.
 
 3. Fetch plans filtered by location:
 ```bash
@@ -365,7 +386,8 @@ uv run .claude/skills/ishosting-manager/scripts/ishosting.py dedicated-plans --l
 
 4. Present filtered plans (much smaller response).
 
-5. User selects plan by code or number.
+5. Ask user: "Which plan would you like? (enter the number or code)"
+   **[STOP GATE]** End your response here. Do NOT fetch configs, OS options, or SSH keys. Wait for user to pick a plan.
 
 ##### Flow B — VPN (all plans share the same specs, location is chosen separately)
 
@@ -390,13 +412,14 @@ All VPN plans show a single default location (USA) but actually support 40+ loca
    3   Germany            DE     -
    ```
    - Ask user: "Which location? (enter the number or code)"
-   - **WAIT for user response!**
+   - **[STOP GATE]** End your response here. Do NOT fetch VPN plans. Do NOT assume a default location. Wait for user input.
 
 3. Then show VPN plans:
    ```bash
    uv run .claude/skills/ishosting-manager/scripts/ishosting.py vpn-plans
    ```
-4. Ask user to pick a plan.
+4. Ask user: "Which plan would you like? (enter the number or code)"
+   **[STOP GATE]** End your response here. Wait for user to pick a plan.
 
 **Important notes:**
 - Extract plan code (e.g., `29_1m`) from user choice
@@ -415,7 +438,12 @@ uv run .claude/skills/ishosting-manager/scripts/ishosting.py vps-configs --code 
 uv run .claude/skills/ishosting-manager/scripts/ishosting.py dedicated-configs --code dedicated-basic
 ```
 
-Show available OS from configs. Let user pick or use their preference.
+Show available OS from configs. Ask user: "Which OS would you like to use?"
+**[STOP GATE]** End your response here. Do NOT ask about SSH keys or proceed to validation. Wait for user to choose an OS.
+
+After the user picks OS — ask about hardware/software additions if applicable:
+"Would you like to add any hardware options (extra RAM, disk, DDoS protection, etc.)? If yes, I'll show you the available options. If no, we'll continue."
+**[STOP GATE]** End your response here. Wait for user answer about additions.
 
 If user wants hardware/software options, extract the `code` and `category.code` from the configs response and build an additions array (see Section [8] for details).
 
@@ -423,7 +451,8 @@ If user wants hardware/software options, extract the `code` and `category.code` 
 
 **[IMPORTANT]** Always ask about SSH keys BEFORE creating the order so the key can be attached during provisioning.
 
-**Ask user**: "Would you like to add an SSH key for secure access to your server?"
+**Ask user**: "Would you like to add an SSH key for secure access to your server? Options: A) use existing key from your machine, B) paste a new key, C) generate a new key pair, D) skip (you'll get root password by email)."
+**[STOP GATE]** End your response here. Do NOT check local SSH keys or query the API. Wait for user to choose an option.
 
 **Option A: Use existing SSH key from OS**
 
@@ -508,7 +537,7 @@ Price:       $5.00/month
 
 **Then explicitly ask**: "Ready to create this order? (yes/no)"
 
-**DO NOT proceed** until the user confirms.
+**[STOP GATE]** End your response here. Do NOT call `billing-order-create` or any other command. Do NOT assume "yes". Wait for the user to explicitly type "yes" or "no".
 
 #### Step 6: Create order (only after confirmation)
 
@@ -549,7 +578,7 @@ uv run .claude/skills/ishosting-manager/scripts/ishosting.py profile-view
 4  Pay later    Skip payment for now, invoice remains pending
 ```
 
-**IMPORTANT:** Wait for user to choose before proceeding!
+**[STOP GATE]** End your response here. Do NOT pay the invoice. Do NOT assume the user wants to pay from balance. Wait for the user to choose one of the 4 options above.
 
 ---
 
@@ -745,7 +774,7 @@ Show the user: service name, plan, location, IP, expiration date.
 Ask the user clearly:
 "Are you sure you want to cancel service **[name]** (ID: [id])? This action is **irreversible** — the service will be terminated. (yes/no)"
 
-**DO NOT** execute the cancel command until the user explicitly confirms with "yes".
+**[STOP GATE]** End your response here. Do NOT run the cancel command. Do NOT assume yes. Wait for the user to explicitly type "yes" before proceeding.
 
 #### Step 3: Execute cancellation (only after confirmation)
 
@@ -804,7 +833,7 @@ Show the user a numbered list of exactly what the agent intends to do on their s
 
 **Ask the user clearly:** "Do you approve this plan? I will only proceed if you confirm. (yes/no)"
 
-**DO NOT** connect to the server or execute any commands until the user explicitly responds with approval.
+**[STOP GATE]** End your response here. Do NOT connect to the server or run any commands. Wait for the user's explicit approval.
 
 If user says NO → ask what to change, revise plan. If any step fails → stop immediately and inform user.
 
