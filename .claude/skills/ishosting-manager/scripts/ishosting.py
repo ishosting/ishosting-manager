@@ -322,7 +322,7 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None, retry: 
             error_body = ""
             try:
                 error_body = e.read().decode(B.encoding)
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
             # Try to extract a clean error message from JSON response
             error_msg = e.reason
@@ -539,7 +539,13 @@ def _order_body(a: Args) -> dict[str, Any]:
     if a.get("ssh_keys"):
         ssh_keys_str = a["ssh_keys"]
         # Support comma-separated list of key IDs
-        key_ids = [int(k.strip()) for k in ssh_keys_str.split(",") if k.strip().isdigit()]
+        key_ids = []
+        for k in ssh_keys_str.split(","):
+            k = k.strip()
+            if k.isdigit():
+                key_ids.append(int(k))
+            elif k:
+                print(f"[WARN] Invalid SSH key ID ignored: '{k}' (must be a positive integer)", file=sys.stderr)
         if key_ids:
             item["options"] = {
                 "ssh": {
